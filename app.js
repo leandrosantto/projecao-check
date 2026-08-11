@@ -1,12 +1,21 @@
 (() => {
+  const stage = document.getElementById('stage');
   const video = document.getElementById('video');
+  const captureWrap = document.getElementById('captureWrap');
   const canvas = document.getElementById('captureCanvas');
   const btnCapture = document.getElementById('btnCapture');
   const btnRetry = document.getElementById('btnRetry');
+  const btnMask = document.getElementById('btnMask');
   const statusEl = document.getElementById('status');
   const resultOverlay = document.getElementById('result-overlay');
   const report = document.getElementById('report');
   const modeBadge = document.getElementById('modeBadge');
+  const zoomBadge = document.getElementById('zoomBadge');
+  const maskLayer = document.getElementById('mask-layer');
+  const maskCutout = document.getElementById('maskCutout');
+  const maskRectOutline = document.getElementById('maskRectOutline');
+  const handleTL = document.getElementById('handleTL');
+  const handleBR = document.getElementById('handleBR');
 
   const ZONES = [
     { key: 'tl', name: 'Superior Esquerda', col: 0, row: 0 },
@@ -20,15 +29,27 @@
     { key: 'br', name: 'Inferior Direita',  col: 2, row: 2 },
   ];
 
+  const ZOOM_MIN = 1, ZOOM_MAX = 4;
+  const MASK_MIN_SIZE = 0.15;
+
   let stream = null;
+  let zoomScale = 1;
+  let maskEnabled = true;
+  let maskRect = { left: 0.10, top: 0.15, right: 0.90, bottom: 0.85 };
+
+  let activeHandle = null; // 'tl' | 'br' | null
+  let pinchStartDist = null;
+  let pinchStartZoom = 1;
+
+  // ---------- camera ----------
 
   async function startCamera() {
     try {
       stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: { ideal: 'environment' },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
         },
         audio: false,
       });
@@ -40,8 +61,133 @@
     }
   }
 
+  // ---------- zoom (pinch) ----------
+
+  function applyZoom() {
+    video.style.transform = zoomScale > 1.001 ? `scale(${zoomScale})` : 'none';
+    zoomBadge.textContent = zoomScale.toFixed(1) + 'x';
+    zoomBadge.style.display = zoomScale > 1.02 ? 'block' : 'none';
+  }
+
+  function touchDist(t1, t2) {
+    return Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+  }
+
+  stage.addEventListener('touchmove', (e) => {
+    if (captureWrap.classList.contains('show')) return; // reviewing a photo, no gestures
+
+    if (activeHandle && e.touches.length === 1) {
+      e.preventDefault();
+      moveHandle(activeHandle, e.touches[0]);
+      return;
+    }
+
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const dist = touchDist(e.touches[0], e.touches[1]);
+      if (pinchStartDist == null) {
+        pinchStartDist = dist;
+        pinchStartZoom = zoomScale;
+      } else {
+        const ratio = dist / pinchStartDist;
+        zoomScale = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, pinchStartZoom * ratio));
+        applyZoom();
+      }
+    }
+  }, { passive: false });
+
+  stage.addEventListener('touchend', (e) => {
+    if (e.touches.length < 2) pinchStartDist = null;
+    if (e.touches.length === 0) activeHandle = null;
+  }, { passive: true });
+
+  // ---------- manual mask (rectangle, 2 draggable corners) ----------
+
+  function renderMask() {
+    if (!maskEnabled) {
+      maskLayer.classList.remove('show');
+      return;
+    }
+    maskLayer.classList.add('show');
+
+    const l = maskRect.left * 100, t = maskRect.top * 100;
+    const r = maskRect.right * 100, b = maskRect.bottom * 100;
+
+    maskCutout.setAttribute('d', `M0,0 H100 V100 H0 Z M${l},${t} H${r} V${b} H${l} Z`);
+    maskRectOutline.setAttribute('x', l);
+    maskRectOutline.setAttribute('y', t);
+    maskRectOutline.setAttribute('width', r - l);
+    maskRectOutline.setAttribute('height', b - t);
+
+    handleTL.style.left = l + '%';
+    handleTL.style.top = t + '%';
+    handleBR.style.left = r + '%';
+    handleBR.style.top = b + '%';
+  }
+
+  function moveHandle(which, touch) {
+    const rect = stage.getBoundingClientRect();
+    let x = (touch.clientX - rect.left) / rect.width;
+    let y = (touch.clientY - rect.top) / rect.height;
+    x = Math.min(1, Math.max(0, x));
+    y = Math.min(1, Math.max(0, y));
+
+    if (which === 'tl') {
+      maskRect.left = Math.min(x, maskRect.right - MASK_MIN_SIZE);
+      maskRect.top = Math.min(y, maskRect.bottom - MASK_MIN_SIZE);
+    } else {
+      maskRect.right = Math.max(x, maskRect.left + MASK_MIN_SIZE);
+      maskRect.bottom = Math.max(y, maskRect.top + MASK_MIN_SIZE);
+    }
+    renderMask();
+  }
+
+  function bindHandle(el, which) {
+    el.addEventListener('touchstart', (e) => {
+      e.stopPropagation();
+      activeHandle = which;
+    }, { passive: true });
+    // mouse support for desktop testing
+    el.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
+      activeHandle = which;
+      const onMove = (ev) => moveHandle(which, { clientX: ev.clientX, clientY: ev.clientY });
+      const onUp = () => {
+        activeHandle = null;
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+      };
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    });
+  }
+  bindHandle(handleTL, 'tl');
+  bindHandle(handleBR, 'br');
+
+  btnMask.addEventListener('click', () => {
+    maskEnabled = !maskEnabled;
+    btnMask.textContent = 'Máscara: ' + (maskEnabled ? 'ON' : 'OFF');
+    btnMask.classList.toggle('toggle-on', maskEnabled);
+    renderMask();
+  });
+
+  // ---------- capture geometry ----------
+
+  // Maps the current pinch-zoom to the region of the intrinsic video frame actually visible
+  // on screen right now (object-fit:cover base crop, further narrowed by the CSS zoom transform).
+  function getEffectiveSourceRect() {
+    const box = stage.getBoundingClientRect();
+    const videoW = video.videoWidth, videoH = video.videoHeight;
+    const coverScale = Math.max(box.width / videoW, box.height / videoH);
+    const coverW = box.width / coverScale, coverH = box.height / coverScale;
+    const coverX = (videoW - coverW) / 2, coverY = (videoH - coverH) / 2;
+    const effW = coverW / zoomScale, effH = coverH / zoomScale;
+    const effX = coverX + (coverW - effW) / 2, effY = coverY + (coverH - effH) / 2;
+    return { x: effX, y: effY, w: effW, h: effH };
+  }
+
   function resetToCamera() {
-    canvas.style.display = 'none';
+    captureWrap.classList.remove('show');
     video.style.display = 'block';
     resultOverlay.classList.remove('show');
     resultOverlay.innerHTML = '';
@@ -49,8 +195,10 @@
     report.innerHTML = '';
     btnRetry.style.display = 'none';
     btnCapture.style.display = 'inline-block';
+    btnMask.style.display = 'inline-block';
     statusEl.style.display = 'block';
-    statusEl.textContent = 'Aponte para a tela cheia com o padrão de foco e capture.';
+    statusEl.textContent = 'Aponte para a tela e ajuste a máscara verde nas bordas da projeção.';
+    renderMask();
   }
 
   function classify(relPct) {
@@ -140,19 +288,36 @@
   function capture() {
     if (!video.videoWidth) return;
 
+    const eff = getEffectiveSourceRect();
+
+    // Compose the pinch-zoom crop with the manual mask rectangle (both are fractions of
+    // the same on-screen box), giving the final region of the source frame to analyze.
+    let srcX, srcY, srcW, srcH;
+    if (maskEnabled) {
+      srcX = eff.x + maskRect.left * eff.w;
+      srcY = eff.y + maskRect.top * eff.h;
+      srcW = (maskRect.right - maskRect.left) * eff.w;
+      srcH = (maskRect.bottom - maskRect.top) * eff.h;
+    } else {
+      srcX = eff.x; srcY = eff.y; srcW = eff.w; srcH = eff.h;
+    }
+
     const MAX_W = 1280;
-    const scale = Math.min(1, MAX_W / video.videoWidth);
-    const w = Math.round(video.videoWidth * scale);
-    const h = Math.round(video.videoHeight * scale);
+    const scale = Math.min(1, MAX_W / srcW);
+    const w = Math.max(1, Math.round(srcW * scale));
+    const h = Math.max(1, Math.round(srcH * scale));
 
     canvas.width = w;
     canvas.height = h;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    ctx.drawImage(video, 0, 0, w, h);
+    ctx.drawImage(video, srcX, srcY, srcW, srcH, 0, 0, w, h);
 
     video.style.display = 'none';
-    canvas.style.display = 'block';
+    maskLayer.classList.remove('show');
+    zoomBadge.style.display = 'none';
+    captureWrap.classList.add('show');
     btnCapture.style.display = 'none';
+    btnMask.style.display = 'none';
     btnRetry.style.display = 'inline-block';
     statusEl.style.display = 'none';
 
@@ -164,5 +329,6 @@
   btnCapture.addEventListener('click', capture);
   btnRetry.addEventListener('click', resetToCamera);
 
+  renderMask();
   startCamera();
 })();
