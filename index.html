@@ -14,22 +14,11 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     overscroll-behavior: none;
   }
-  #app { display: flex; flex-direction: column; height: 100%; }
-
-  header {
-    padding: 12px 16px;
-    display: flex; align-items: center; justify-content: space-between;
-    border-bottom: 1px solid #1c212b;
-  }
-  header h1 { font-size: 16px; margin: 0; font-weight: 600; letter-spacing: .2px; }
-  header .badge {
-    font-size: 11px; color: #8a93a3; border: 1px solid #2a3140;
-    border-radius: 999px; padding: 2px 8px;
-  }
-
+  /* Camera fills the whole viewport, edge to edge, behind everything else */
   #stage {
-    position: relative; flex: 1; overflow: hidden;
+    position: fixed; inset: 0; overflow: hidden;
     background: #000; display: flex; align-items: center; justify-content: center;
+    z-index: 0;
   }
   video, canvas#captureCanvas {
     width: 100%; height: 100%; object-fit: cover;
@@ -61,29 +50,58 @@
     pointer-events: none;
   }
 
+  /* UI layer floats above the fixed camera layer; only its own controls are interactive */
+  #app {
+    position: fixed; inset: 0; z-index: 1;
+    display: flex; flex-direction: column;
+    pointer-events: none;
+  }
+  #app > * { pointer-events: auto; }
+  #spacer { flex: 1; pointer-events: none; }
+
+  header {
+    padding: 10px 16px;
+    display: flex; align-items: center; justify-content: space-between;
+    background: linear-gradient(rgba(6,8,12,0.65), rgba(6,8,12,0.15));
+  }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: .2px; }
+  header .badge {
+    font-size: 11px; color: #d7dbe4; border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 999px; padding: 2px 8px; background: rgba(10,12,16,0.4);
+  }
+
   footer {
-    padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
-    border-top: 1px solid #1c212b;
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: linear-gradient(rgba(6,8,12,0.15), rgba(6,8,12,0.7));
     display: flex; gap: 10px; align-items: center; justify-content: center;
   }
   button {
     appearance: none; border: none; border-radius: 12px;
-    font-size: 15px; font-weight: 600; padding: 14px 22px;
+    font-size: 15px; font-weight: 600; padding: 13px 22px;
     cursor: pointer; color: #0b0e14; background: #eef1f6;
   }
   button.secondary {
-    background: transparent; color: #eef1f6; border: 1px solid #2a3140;
+    background: rgba(10,12,16,0.5); color: #eef1f6; border: 1px solid rgba(255,255,255,0.3);
   }
   button:active { opacity: .8; }
 
   #report {
     display: none;
     padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
-    border-top: 1px solid #1c212b;
+    background: rgba(8,10,15,0.92);
     max-height: 40vh; overflow-y: auto;
     font-size: 13px;
   }
   #report.show { display: block; }
+
+  /* Short viewports (landscape phones): keep the floating bars thin so framing area stays large */
+  @media (orientation: landscape) and (max-height: 500px) {
+    header { padding: 6px 12px; }
+    header h1 { font-size: 13px; }
+    footer { padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); }
+    button { padding: 9px 16px; font-size: 13px; }
+    #report { max-height: 55vh; }
+  }
   #report h2 { font-size: 14px; margin: 0 0 8px; }
   .zone-row {
     display: flex; justify-content: space-between; align-items: center;
@@ -98,24 +116,26 @@
 </style>
 </head>
 <body>
+<div id="stage">
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="captureCanvas"></canvas>
+  <svg id="grid-overlay" class="show" viewBox="0 0 100 100" preserveAspectRatio="none">
+    <line x1="33.3" y1="0" x2="33.3" y2="100" stroke="rgba(255,255,255,0.25)" stroke-width="0.3"/>
+    <line x1="66.6" y1="0" x2="66.6" y2="100" stroke="rgba(255,255,255,0.25)" stroke-width="0.3"/>
+    <line x1="0" y1="33.3" x2="100" y2="33.3" stroke="rgba(255,255,255,0.25)" stroke-width="0.3"/>
+    <line x1="0" y1="66.6" x2="100" y2="66.6" stroke="rgba(255,255,255,0.25)" stroke-width="0.3"/>
+  </svg>
+  <div id="result-overlay"></div>
+  <div id="status">Aponte para a tela cheia com o padrão de foco e capture.</div>
+</div>
+
 <div id="app">
   <header>
     <h1>Projeção Check — Foco</h1>
     <span class="badge" id="modeBadge">câmera</span>
   </header>
 
-  <div id="stage">
-    <video id="video" autoplay playsinline muted></video>
-    <canvas id="captureCanvas"></canvas>
-    <svg id="grid-overlay" class="show" viewBox="0 0 100 100" preserveAspectRatio="none">
-      <line x1="33.3" y1="0" x2="33.3" y2="100" stroke="rgba(255,255,255,0.25)" stroke-width="0.3"/>
-      <line x1="66.6" y1="0" x2="66.6" y2="100" stroke="rgba(255,255,255,0.25)" stroke-width="0.3"/>
-      <line x1="0" y1="33.3" x2="100" y2="33.3" stroke="rgba(255,255,255,0.25)" stroke-width="0.3"/>
-      <line x1="0" y1="66.6" x2="100" y2="66.6" stroke="rgba(255,255,255,0.25)" stroke-width="0.3"/>
-    </svg>
-    <div id="result-overlay"></div>
-    <div id="status">Aponte para a tela cheia com o padrão de foco e capture.</div>
-  </div>
+  <div id="spacer"></div>
 
   <footer>
     <button class="secondary" id="btnRetry" style="display:none;">Nova captura</button>
