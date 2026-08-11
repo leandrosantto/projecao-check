@@ -14,60 +14,48 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     overscroll-behavior: none;
   }
-  /* Camera fills the whole viewport, edge to edge, behind everything else */
+
+  /* ---------- camada da câmera (fundo, tela cheia) ---------- */
   #stage {
-    position: fixed; inset: 0; overflow: hidden;
+    position: fixed; inset: 0; overflow: hidden; z-index: 0;
     background: #000; display: flex; align-items: center; justify-content: center;
-    z-index: 0; touch-action: none;
+    touch-action: none;
   }
-  video {
-    width: 100%; height: 100%; object-fit: cover;
-    display: block; transform-origin: center center;
-  }
+  video { width: 100%; height: 100%; object-fit: cover; display: block; transform-origin: center center; }
 
-  /* Captured photo review: sized to its own aspect ratio (not cropped), centered by #stage's flex */
-  #captureWrap { display: none; position: relative; touch-action: none; }
+  #captureWrap { display: none; position: relative; }
   #captureWrap.show { display: block; }
-  #captureCanvas {
-    display: block; width: auto; height: auto;
-    max-width: 92vw; max-height: 76vh;
-  }
+  #captureCanvas { display: block; width: auto; height: auto; max-width: 94vw; max-height: 72vh; }
 
-  #grid-overlay {
-    position: absolute; inset: 0; pointer-events: none;
-    display: none;
-  }
-  #grid-overlay.show { display: block; }
+  #overlay-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  #mask-layer { position: absolute; inset: 0; display: none; touch-action: none; }
+  #mask-layer.show { display: block; }
 
-  #result-overlay {
-    position: absolute; inset: 0; pointer-events: none; display: none;
+  .mask-handle {
+    position: absolute; width: 30px; height: 30px; margin: -15px;
+    border-radius: 50%; background: rgba(74,222,128,0.22);
+    border: 2px solid #4ade80; touch-action: none;
   }
+  .mask-handle::after { content: ''; position: absolute; inset: 9px; border-radius: 50%; background: #4ade80; }
+  .mask-handle.masking { background: rgba(250,204,21,0.22); border-color: #facc15; }
+  .mask-handle.masking::after { background: #facc15; }
+  .mask-handle.dim { opacity: .35; }
+
+  #result-overlay { position: absolute; inset: 0; pointer-events: none; display: none; }
   #result-overlay.show { display: block; }
   .zone-label {
     position: absolute; transform: translate(-50%, -50%);
-    font-size: 13px; font-weight: 700; padding: 3px 8px; border-radius: 6px;
-    background: rgba(10,12,16,0.75); border: 1px solid rgba(255,255,255,0.15);
-    white-space: nowrap;
+    font-size: 12px; font-weight: 700; padding: 3px 7px; border-radius: 6px;
+    background: rgba(10,12,16,0.78); border: 1px solid rgba(255,255,255,0.15);
+    white-space: nowrap; text-align: center; line-height: 1.25;
   }
+  .zone-label small { display: block; font-size: 10px; font-weight: 600; opacity: .85; }
 
   #status {
-    position: absolute; top: 10px; left: 10px; right: 10px;
-    text-align: center; font-size: 12px; color: #c7cedb;
-    background: rgba(10,12,16,0.55); padding: 6px 10px; border-radius: 8px;
+    position: absolute; left: 10px; right: 10px; top: 46px;
+    text-align: center; font-size: 12px; color: #dfe4ec;
+    background: rgba(10,12,16,0.6); padding: 6px 10px; border-radius: 8px;
     pointer-events: none;
-  }
-
-  /* Manual mask: darkens everything outside the rectangle, two draggable corner handles */
-  #mask-layer { position: absolute; inset: 0; display: none; touch-action: none; }
-  #mask-layer.show { display: block; }
-  #mask-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-  .mask-handle {
-    position: absolute; width: 30px; height: 30px; margin: -15px;
-    border-radius: 50%; background: rgba(74,222,128,0.25);
-    border: 2px solid #4ade80; touch-action: none;
-  }
-  .mask-handle::after {
-    content: ''; position: absolute; inset: 9px; border-radius: 50%; background: #4ade80;
   }
 
   .pill {
@@ -75,99 +63,139 @@
     background: rgba(10,12,16,0.6); border: 1px solid rgba(255,255,255,0.25);
     border-radius: 999px; padding: 4px 10px; pointer-events: none;
   }
-  #zoomBadge { top: 10px; right: 10px; display: none; }
+  #zoomBadge { top: 46px; right: 10px; display: none; }
 
-  /* UI layer floats above the fixed camera layer; only its own controls are interactive */
+  /* ---------- camada de UI flutuante ---------- */
   #app {
     position: fixed; inset: 0; z-index: 1;
-    display: flex; flex-direction: column;
-    pointer-events: none;
+    display: flex; flex-direction: column; pointer-events: none;
   }
   #app > * { pointer-events: auto; }
   #spacer { flex: 1; pointer-events: none; }
 
   header {
-    padding: 10px 16px;
-    display: flex; align-items: center; justify-content: space-between;
-    background: linear-gradient(rgba(6,8,12,0.65), rgba(6,8,12,0.15));
+    padding: 8px 12px; display: flex; align-items: center; gap: 8px;
+    background: linear-gradient(rgba(6,8,12,0.75), rgba(6,8,12,0.1));
   }
-  header h1 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: .2px; }
-  header .badge {
-    font-size: 11px; color: #d7dbe4; border: 1px solid rgba(255,255,255,0.25);
-    border-radius: 999px; padding: 2px 8px; background: rgba(10,12,16,0.4);
+  #modeChip {
+    flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px;
+    background: rgba(10,12,16,0.55); border: 1px solid rgba(255,255,255,0.22);
+    border-radius: 999px; padding: 7px 12px; font-size: 13px; font-weight: 600;
+    color: #eef1f6; cursor: pointer; text-align: left;
+  }
+  #modeChip .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #modeChip .caret { opacity: .6; font-size: 10px; }
+  .icon-btn {
+    flex: 0 0 auto; width: 36px; height: 36px; border-radius: 50%;
+    background: rgba(10,12,16,0.55); border: 1px solid rgba(255,255,255,0.22);
+    color: #eef1f6; font-size: 15px; padding: 0; cursor: pointer;
   }
 
   footer {
-    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
-    background: linear-gradient(rgba(6,8,12,0.15), rgba(6,8,12,0.7));
-    display: flex; gap: 8px; align-items: center; justify-content: center;
-    flex-wrap: wrap;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    background: linear-gradient(rgba(6,8,12,0.1), rgba(6,8,12,0.78));
+    display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap;
   }
   button {
     appearance: none; border: none; border-radius: 12px;
-    font-size: 15px; font-weight: 600; padding: 13px 20px;
+    font-size: 14px; font-weight: 600; padding: 12px 18px;
     cursor: pointer; color: #0b0e14; background: #eef1f6;
   }
-  button.secondary {
-    background: rgba(10,12,16,0.5); color: #eef1f6; border: 1px solid rgba(255,255,255,0.3);
-  }
-  button.toggle-on {
-    background: rgba(74,222,128,0.2); color: #4ade80; border: 1px solid #4ade80;
-  }
+  button.secondary { background: rgba(10,12,16,0.55); color: #eef1f6; border: 1px solid rgba(255,255,255,0.28); }
+  button.toggle-on { background: rgba(74,222,128,0.18); color: #4ade80; border: 1px solid #4ade80; }
+  button.masking-on { background: rgba(250,204,21,0.18); color: #facc15; border: 1px solid #facc15; }
   button:active { opacity: .8; }
+  button:disabled { opacity: .4; }
 
-  #report {
-    display: none;
-    padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
-    background: rgba(8,10,15,0.92);
-    max-height: 40vh; overflow-y: auto;
-    font-size: 13px;
+  /* ---------- folhas (modos / ajustes / relatório) ---------- */
+  .sheet {
+    position: fixed; inset: 0; z-index: 3; display: none;
+    background: rgba(6,8,12,0.97); overflow-y: auto;
+    padding: 14px 16px calc(20px + env(safe-area-inset-bottom));
   }
-  #report.show { display: block; }
+  .sheet.show { display: block; }
+  .sheet-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px; position: sticky; top: -14px;
+    background: rgba(6,8,12,0.97); padding: 8px 0; z-index: 1;
+  }
+  .sheet-head h2 { font-size: 16px; margin: 0; }
 
-  /* Short viewports (landscape phones): keep the floating bars thin so framing area stays large */
+  .mode-item {
+    display: block; width: 100%; text-align: left; margin-bottom: 8px;
+    background: rgba(255,255,255,0.04); border: 1px solid #222834;
+    border-radius: 12px; padding: 12px 14px; color: #eef1f6;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .mode-item.active { border-color: #4ade80; background: rgba(74,222,128,0.1); }
+  .mode-item .sub { display: block; font-size: 12px; font-weight: 500; color: #9aa3b2; margin-top: 3px; }
+  .mode-item .pat { display: block; font-size: 12px; font-weight: 500; color: #6ea8fe; margin-top: 5px; }
+
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12px; color: #9aa3b2; margin-bottom: 5px; }
+  .field select, .field input {
+    width: 100%; background: #11151d; color: #eef1f6;
+    border: 1px solid #2a3140; border-radius: 10px; padding: 10px 12px; font-size: 14px;
+  }
+  .hint { font-size: 11px; color: #7d8798; margin-top: 5px; line-height: 1.45; }
+
+  .card { border: 1px solid #222834; border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+  .card h3 { font-size: 13px; margin: 0 0 8px; color: #c7cedb; }
+  .row {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+    padding: 6px 0; border-bottom: 1px solid #171b24; font-size: 13px;
+  }
+  .row:last-child { border-bottom: none; }
+  .row .k { color: #9aa3b2; }
+  .row .v { font-variant-numeric: tabular-nums; font-weight: 700; text-align: right; }
+  .note { font-size: 11px; color: #7d8798; line-height: 1.5; margin-top: 8px; }
+  .warnbox {
+    font-size: 12px; line-height: 1.5; border-radius: 10px; padding: 9px 11px; margin-bottom: 10px;
+    background: rgba(250,204,21,0.1); border: 1px solid rgba(250,204,21,0.4); color: #facc15;
+  }
+  .grid-map { display: grid; gap: 4px; margin: 4px 0 8px; }
+  .grid-cell {
+    border-radius: 6px; padding: 7px 2px; text-align: center;
+    font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+
+  .ok { color: #4ade80; } .warn { color: #facc15; } .bad { color: #f87171; } .muted { color: #7d8798; }
+  .bg-ok { background: rgba(74,222,128,0.16); } .bg-warn { background: rgba(250,204,21,0.16); }
+  .bg-bad { background: rgba(248,113,113,0.16); } .bg-muted { background: rgba(125,135,152,0.12); }
+
+  /* Paisagem em celular: barras finas para não roubar área de enquadramento */
   @media (orientation: landscape) and (max-height: 500px) {
-    header { padding: 6px 12px; }
-    header h1 { font-size: 13px; }
-    footer { padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); }
-    button { padding: 9px 16px; font-size: 13px; }
-    #report { max-height: 55vh; }
+    header { padding: 5px 10px; }
+    #modeChip { padding: 5px 10px; font-size: 12px; }
+    .icon-btn { width: 30px; height: 30px; font-size: 13px; }
+    footer { padding: 6px 10px calc(6px + env(safe-area-inset-bottom)); }
+    button { padding: 8px 14px; font-size: 13px; }
+    #status { top: 38px; font-size: 11px; padding: 4px 8px; }
+    #zoomBadge { top: 38px; }
   }
-  #report h2 { font-size: 14px; margin: 0 0 8px; }
-  .zone-row {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 7px 0; border-bottom: 1px solid #171b24;
-  }
-  .zone-row:last-child { border-bottom: none; }
-  .zone-name { color: #c7cedb; }
-  .zone-score { font-variant-numeric: tabular-nums; font-weight: 700; }
-  .ok { color: #4ade80; }
-  .warn { color: #facc15; }
-  .bad { color: #f87171; }
 </style>
 </head>
 <body>
+
 <div id="stage">
   <video id="video" autoplay playsinline muted></video>
 
-  <svg id="grid-overlay" class="show" viewBox="0 0 100 100" preserveAspectRatio="none">
-    <line x1="33.3" y1="0" x2="33.3" y2="100" stroke="rgba(255,255,255,0.25)" stroke-width="0.3"/>
-    <line x1="66.6" y1="0" x2="66.6" y2="100" stroke="rgba(255,255,255,0.25)" stroke-width="0.3"/>
-    <line x1="0" y1="33.3" x2="100" y2="33.3" stroke="rgba(255,255,255,0.25)" stroke-width="0.3"/>
-    <line x1="0" y1="66.6" x2="100" y2="66.6" stroke="rgba(255,255,255,0.25)" stroke-width="0.3"/>
-  </svg>
-
   <div id="mask-layer" class="show">
-    <svg id="mask-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
-      <path id="maskCutout" fill="rgba(0,0,0,0.55)" fill-rule="evenodd"/>
-      <rect id="maskRectOutline" fill="none" stroke="#4ade80" stroke-width="0.4" stroke-dasharray="1.5,1.5"/>
+    <svg id="overlay-svg" viewBox="0 0 1000 1000" preserveAspectRatio="none">
+      <path id="maskCutout" fill="rgba(0,0,0,0.5)" fill-rule="evenodd"/>
+      <polygon id="imageQuadLine" fill="none" stroke="#4ade80" stroke-width="3" stroke-dasharray="12,9"/>
+      <polygon id="maskingQuadLine" fill="none" stroke="#facc15" stroke-width="3" stroke-dasharray="12,9" style="display:none"/>
+      <g id="zoneLines" stroke="rgba(255,255,255,0.28)" stroke-width="1.5"></g>
     </svg>
-    <div class="mask-handle" id="handleTL"></div>
-    <div class="mask-handle" id="handleBR"></div>
+    <div class="mask-handle" data-corner="0"></div>
+    <div class="mask-handle" data-corner="1"></div>
+    <div class="mask-handle" data-corner="2"></div>
+    <div class="mask-handle" data-corner="3"></div>
   </div>
 
   <span class="pill" id="zoomBadge">1.0x</span>
-  <div id="status">Aponte para a tela e ajuste a máscara verde nas bordas da projeção.</div>
+  <div id="status">Marque os 4 cantos da tela projetada.</div>
 
   <div id="captureWrap">
     <canvas id="captureCanvas"></canvas>
@@ -177,27 +205,98 @@
 
 <div id="app">
   <header>
-    <h1>Projeção Check — Foco</h1>
-    <span class="badge" id="modeBadge">câmera</span>
+    <button id="modeChip"><span class="name">Foco &amp; Scheimpflug</span><span class="caret">▼</span></button>
+    <button class="icon-btn" id="btnSettings" title="Ajustes">⚙</button>
+    <button class="icon-btn" id="btnReport" title="Relatório">📋</button>
   </header>
 
   <div id="spacer"></div>
 
   <footer>
     <button class="secondary" id="btnRetry" style="display:none;">Nova captura</button>
+    <button class="secondary" id="btnQuadToggle" style="display:none;">Editando: quadro</button>
     <button class="secondary toggle-on" id="btnMask">Máscara: ON</button>
-    <button id="btnCapture">Capturar e analisar</button>
+    <button id="btnCapture">Capturar</button>
   </footer>
-
-  <div id="report"></div>
 </div>
 
+<!-- folha: seleção de modo -->
+<div class="sheet" id="sheetModes">
+  <div class="sheet-head">
+    <h2>O que medir</h2>
+    <button class="icon-btn" data-close="sheetModes">✕</button>
+  </div>
+  <div id="modeList"></div>
+</div>
+
+<!-- folha: ajustes -->
+<div class="sheet" id="sheetSettings">
+  <div class="sheet-head">
+    <h2>Ajustes</h2>
+    <button class="icon-btn" data-close="sheetSettings">✕</button>
+  </div>
+
+  <div class="field">
+    <label for="setAspect">Formato da tela</label>
+    <select id="setAspect">
+      <option value="2.39">Scope — 2.39:1</option>
+      <option value="1.85">Flat — 1.85:1</option>
+      <option value="1.78">16:9 — 1.78:1</option>
+      <option value="1.66">1.66:1</option>
+    </select>
+    <div class="hint">Usado para "desentortar" a tela antes de analisar. As zonas passam a corresponder a regiões reais da tela.</div>
+  </div>
+
+  <div class="field">
+    <label for="setProjRes">Resolução do projetor (largura)</label>
+    <select id="setProjRes">
+      <option value="2048">2K — 2048 px</option>
+      <option value="4096">4K — 4096 px</option>
+    </select>
+    <div class="hint">Converte a convergência medida em pixels do projetor, que é a unidade em que a especificação é escrita.</div>
+  </div>
+
+  <div class="field">
+    <label for="setRoom">Sala / identificação</label>
+    <input id="setRoom" type="text" placeholder="Ex.: Sala 05 — Christie CP2215">
+  </div>
+
+  <div class="card">
+    <h3>Calibração de luminância (fL)</h3>
+    <div class="field">
+      <label for="setCalibRef">Leitura de referência do fotômetro (fL)</label>
+      <input id="setCalibRef" type="number" step="0.1" placeholder="Ex.: 14.2">
+    </div>
+    <button class="secondary" id="btnCalibrate" style="width:100%">Calibrar com a última captura de branco</button>
+    <div class="hint" id="calibStatus">Sem calibração. A luminância será exibida apenas como valor relativo.</div>
+  </div>
+
+  <div class="card">
+    <h3>Câmera</h3>
+    <div class="row"><span class="k">Trava de exposição</span><span class="v" id="expStatus">—</span></div>
+    <div class="row"><span class="k">Trava de balanço de branco</span><span class="v" id="wbStatus">—</span></div>
+    <button class="secondary" id="btnLock" style="width:100%;margin-top:10px">Travar exposição e balanço de branco</button>
+    <div class="hint">Sem trava, medições de luminância e contraste não são confiáveis — o celular reajusta o brilho sozinho entre as capturas. Uniformidade, cor relativa, foco e convergência não dependem disso.</div>
+  </div>
+</div>
+
+<!-- folha: relatório -->
+<div class="sheet" id="sheetReport">
+  <div class="sheet-head">
+    <h2>Relatório</h2>
+    <div style="display:flex;gap:8px">
+      <button class="icon-btn" id="btnCopyReport" title="Copiar">⎘</button>
+      <button class="icon-btn" data-close="sheetReport">✕</button>
+    </div>
+  </div>
+  <div id="reportBody"></div>
+</div>
+
+<script src="analysis.js"></script>
 <script src="app.js"></script>
 <script>
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
-    });
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
   }
 </script>
 </body>
